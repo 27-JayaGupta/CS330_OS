@@ -88,7 +88,7 @@ usertrap(void)
 //
 void
 usertrapret(void)
-{
+{ 
   struct proc *p = myproc();
 
   // we're about to switch the destination of traps from
@@ -213,7 +213,7 @@ devintr()
     w_sip(r_sip() & ~2);
 
     return 2;
-  } else {
+  } else { 
     return 0;
   }
 }

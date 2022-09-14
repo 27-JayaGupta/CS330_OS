@@ -53,7 +53,7 @@ argraw(int n)
   return -1;
 }
 
-// Fetch the nth 32-bit system call argument.
+// Fetch the  argumentnth 32-bit system call.
 int
 argint(int n, int *ip)
 {
@@ -104,6 +104,13 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
+extern uint64 sys_getppid(void);
+extern uint64 sys_yield(void);
+extern uint64 sys_getpa(void);
+extern uint64 sys_forkf(void);
+extern uint64 sys_waitpid(void);
+extern int sys_ps(void);
+extern int sys_pinfo(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -127,6 +134,13 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_getppid] sys_getppid,
+[SYS_yield] sys_yield,
+[SYS_getpa] sys_getpa,
+[SYS_forkf] sys_forkf,
+[SYS_waitpid] sys_waitpid,
+[SYS_ps]      sys_ps,
+[SYS_pinfo]   sys_pinfo,
 };
 
 void

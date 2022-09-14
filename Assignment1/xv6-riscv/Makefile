@@ -136,6 +136,13 @@ UPROGS=\
 	$U/_forksleep\
 	$U/_pipeline\
 	$U/_primefactors\
+	$U/_tgetppid\
+	$U/_tyield\
+	$U/_tgetpa\
+	$U/_tforkf\
+	$U/_twaitpid\
+	$U/_tps\
+	$U/_tpinfo\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

@@ -95,3 +95,83 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_getppid(void)
+{ 
+  return getppid();
+}
+
+uint64
+sys_yield(void)
+{
+  yield();
+  return 0;
+}
+
+uint64
+sys_getpa(void)
+{ 
+  uint64 vap;
+  if( argaddr(0, &vap) < 0){
+    return -1;
+  }
+
+  uint64 pa = getpa(vap);
+  return pa;
+}
+
+uint64
+sys_forkf(void)
+{ 
+  uint64 f;
+
+  if(argaddr(0, &f) < 0){
+    return -1;
+  }
+
+  return forkf(f);
+}
+
+uint64
+sys_waitpid(void)
+{ 
+  int cpid;
+  uint64 status;
+  if(argint(0, &cpid) < -1){
+    printf("Error in retrieving child pid.\n");
+    return -1;
+  }
+
+  if(argaddr(0,&status) < -1){
+    printf("Error in retrieving status address.\n");
+    return -1;
+  }
+
+  return waitpid(cpid, status);
+}
+
+int
+sys_ps(void)
+{
+  return ps();
+}
+
+int 
+sys_pinfo(void)
+{
+  uint64 pstataddr;
+  int pid;
+
+  if(argint(0,&pid) < 0) {
+    printf("[pinfo]Error in retriving pid argument.\n");
+    return -1;
+  }
+
+  if(argaddr(1, &pstataddr) < 0) {
+    printf("[pinfo]Error in retrieving pstat address argument.\n");
+    return -1;
+  }
+
+  return pinfo(pid, pstataddr);
+}

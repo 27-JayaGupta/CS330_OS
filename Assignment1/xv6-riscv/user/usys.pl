@@ -14,6 +14,24 @@ sub entry {
     print " ecall\n";
     print " ret\n";
 }
+
+sub forkf_entry {
+    my $name = shift;
+    print ".global $name\n";
+    print "${name}:\n";
+    print " li a7, SYS_${name}\n";
+    print " ecall\n";
+    print " bgtz a0, return\n";
+    print " addi sp, sp, -16\n";
+    print " sd ra, 8(sp)\n";
+    print " sd a0, 16(sp)\n";
+    print " jalr a1\n";
+    print " ld ra, 8(sp)\n";
+    print " ld a0, 16(sp)\n";
+    print " addi sp, sp, 16\n";
+    print " return:";
+    print " ret\n";
+}
 	
 entry("fork");
 entry("exit");
@@ -36,3 +54,10 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
+entry("getppid");
+entry("yield");
+entry("getpa");
+entry("waitpid");
+entry("ps");
+entry("pinfo");
+entry("forkf");
