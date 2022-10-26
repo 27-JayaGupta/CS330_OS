@@ -163,6 +163,7 @@ JOBFILES=\
 	$U/batch5.txt\
 	$U/batch6.txt\
 	$U/batch7.txt\
+	$U/batch1_sjf.txt\
 
 fs.img: mkfs/mkfs README $(UPROGS) $(JOBFILES)
 	mkfs/mkfs fs.img README $(UPROGS) $(JOBFILES)

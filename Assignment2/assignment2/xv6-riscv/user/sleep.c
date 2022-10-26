@@ -12,7 +12,8 @@ main(int argc, char *argv[])
   }
 
   i = atoi(argv[1]);
-  sleep(i);
+  while(1);
+  //sleep(i);
 
   exit(0);
 }

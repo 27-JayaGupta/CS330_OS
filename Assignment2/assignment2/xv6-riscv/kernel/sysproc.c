@@ -185,5 +185,11 @@ sys_forkp(void)
   if(argint(0, &p) < 0)
     return -1;
   
+  // Check if base priority is positive or not.
+  // If negative, make the priority value = 0
+  if(p < 0) {
+    p = 0;
+  }
+
   return forkp(p);
 }

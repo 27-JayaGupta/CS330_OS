@@ -81,11 +81,6 @@ usertrap(void)
     if(current_sched_policy == SCHED_PREEMPT_UNIX || current_sched_policy == SCHED_PREEMPT_RR){
       yield();
     }
-    else {
-      if (!(myproc()->special)) {
-        yield();
-      }
-    }
   }
     
   usertrapret();
@@ -161,10 +156,6 @@ kerneltrap()
   if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING){
     if(current_sched_policy == SCHED_PREEMPT_RR || current_sched_policy == SCHED_PREEMPT_UNIX){
       yield();
-    } else {
-      if(!(myproc()->special)) {
-        yield();
-      }
     }
   }
 

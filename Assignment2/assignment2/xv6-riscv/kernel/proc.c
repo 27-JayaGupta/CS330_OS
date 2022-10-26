@@ -478,26 +478,24 @@ exit(int status)
     CURRENT_BATCH_SIZE -=1;
   
     stats.avg_turnaround_time += (p->endtime - p->ctime);
+    stats.avg_completion_time += p->endtime;
 
     if(p->endtime < stats.min_completion_time) {
       stats.min_completion_time = p->endtime;
-    }
-
-    if(p->endtime > stats.max_completion_time) {
+    } else if(p->endtime > stats.max_completion_time) {
       stats.max_completion_time = p->endtime;
     }
-
-    stats.avg_completion_time += p->endtime;
 
     // Calculate batch execution time if the process is the last process from the batch
     if((CURRENT_BATCH_SIZE == 0) && (BATCH_SIZE != 0)){
       stats.batch_exec_time = p->endtime - stats.batch_exec_time;
     }
-  }
 
-  // Calculate estimate of cpu burst for sjf
-  if(p->special && current_sched_policy == SCHED_NPREEMPT_SJF)
-    calculate_estimate(p);
+    // Calculate estimate of cpu burst for sjf
+    if(current_sched_policy == SCHED_NPREEMPT_SJF)
+      calculate_estimate(p, xticks);
+    
+  }
 
   // Jump into the scheduler, never to return.
   sched();
@@ -602,47 +600,38 @@ struct proc*
 sjf()
 {
   struct proc* p, *sched_proc;
-  int min_burst = -1;
   sched_proc = 0;
-  for(p = proc; p < &proc[NPROC]; p++) {
-    acquire(&p->lock);
-    if((!p->special) && (p->state == RUNNABLE)){ // If we come across RUNNABLE non batch process, schedule it.
+  for(;;) {
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state != RUNNABLE){
+        release(&p->lock);
+        continue;
+      }
+      if((!p->special)){ // If we come across RUNNABLE non batch process, schedule it.
+        release(&p->lock);
+        return p;
+      }
+      if(p->special) {
+        if(sched_proc == 0){
+          sched_proc = p;
+        }
+        else if((p->nextest <= sched_proc->nextest)){
+          if((p->nextest  < sched_proc->nextest ) || (p->proc_wait_time > sched_proc->proc_wait_time)){
+            sched_proc = p;
+          }   
+        }
+      }    
       release(&p->lock);
-      return p;
     }
-    if(p->state == RUNNABLE && p->special) {
-      if(min_burst == -1 || p->nextest < min_burst){
-        sched_proc = p;
-        min_burst = p->nextest;
-      }
-      
-    }    
-    release(&p->lock);
+
+    if(sched_proc != 0)
+      break;
   }
+  
   return sched_proc;
 }
 
-struct proc*
-fcfs()
-{
-  struct proc* p, *sched_proc;
-  sched_proc = 0;
-  p = 0;
-  int min_time = -1;
-  for(p = proc; p < &proc[NPROC]; p++) {
-    acquire(&p->lock);
-
-    //printf("Current proc in fcfs: %s\n", p->name);
-    if(p->state == RUNNABLE) {
-      if(min_time == -1 || p->ctime < min_time){
-        min_time = p->ctime;
-        sched_proc = p;
-      }
-    }    
-    release(&p->lock);
-  }
-  return sched_proc;
-}
 
 struct proc*
 unix_scheduling()
@@ -650,36 +639,41 @@ unix_scheduling()
   struct proc* p, *sched_proc;
   sched_proc = 0;
   p=0;
-  int min_priority = -1;
+  int flag = 0;
+  for(;;) {
 
-  for(p = proc; p < &proc[NPROC]; p++) {
-    acquire(&p->lock);
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state != RUNNABLE){
+        release(&p->lock);
+        continue;
+      }
 
-    //printf("Current proc in fcfs: %s\n", p->name);
-    if((p->state == RUNNABLE) && p->special) {
+      if(!(p->special) && !flag){ // If we come across RUNNABLE non batch process, schedule it.
+        sched_proc = p;
+        flag = 1;
+      }
+
+      else if(p->special){
+        
         p->cpu_usage /= 2;
         p->priority = p->base_priority + (p->cpu_usage/2);
-    }    
-    release(&p->lock);
-  }
 
-  for(p = proc; p < &proc[NPROC]; p++) {
-    acquire(&p->lock);
-
-    if((!p->special) && (p->state == RUNNABLE)){ // If we come across RUNNABLE non batch process, schedule it.
+        if(sched_proc == 0){
+          sched_proc = p;
+        }else if(!flag && (p->priority <= sched_proc->priority)){
+          if((p->priority < sched_proc->priority) || (p->proc_wait_time > sched_proc->proc_wait_time)){
+            sched_proc = p;
+          }   
+        }
+      }    
       release(&p->lock);
-      return p;
     }
 
-    if(p->state == RUNNABLE && p->special) {
-      if(min_priority == -1 || p->priority < min_priority){
-        sched_proc = p;
-        min_priority = p->priority;
-      } 
-    }    
-    release(&p->lock);
+    if(sched_proc != 0)
+      break;
   }
-
+  
   return sched_proc;
 }
 
@@ -705,21 +699,23 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
 
       // Print stats if all batch processes are finished
-      if(CURRENT_BATCH_SIZE == 0 && BATCH_SIZE !=0) print_batch_stats();
+      if(CURRENT_BATCH_SIZE == 0 && BATCH_SIZE !=0) 
+      { 
+        // Once the entire batch is scheduled set the default policy to Round Robin again
+        schedpolicy(SCHED_PREEMPT_RR);
+        print_batch_stats();
+      }
 
       selected_proc = 0;
-      if(current_sched_policy != SCHED_PREEMPT_RR) p = proc;
       if(current_sched_policy == SCHED_PREEMPT_UNIX)
-        selected_proc = unix_scheduling();
-      else if(current_sched_policy == SCHED_NPREEMPT_SJF)
-        selected_proc = sjf();
-      else if(current_sched_policy == SCHED_NPREEMPT_FCFS)
-        selected_proc = fcfs();
-      else
-        selected_proc = p;
-      
-      if(selected_proc == 0) {
-        continue;
+      {
+          selected_proc = unix_scheduling();
+          p = proc; // set p to first proc if policy changes to RR in between
+      } else if(current_sched_policy == SCHED_NPREEMPT_SJF){
+          p = proc; // set p to first proc 
+          selected_proc = sjf();
+      } else {
+           selected_proc = p;
       }
 
       acquire(&selected_proc->lock);
@@ -742,7 +738,8 @@ scheduler(void)
           else xticks = ticks;
 
           // Update the average waiting time.
-          stats.avg_waiting_time += (xticks - selected_proc->wtime);
+          selected_proc->proc_wait_time += xticks - selected_proc->wtime;
+          stats.avg_waiting_time += xticks - selected_proc->wtime;
 
           if(current_sched_policy == SCHED_NPREEMPT_SJF)
             selected_proc->sticks = xticks;
@@ -790,27 +787,27 @@ sched(void)
 void
 yield(void)
 {
+  uint xticks;
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
 
-  if (!holding(&tickslock)) {
-    acquire(&tickslock);
-    p->wtime = ticks;
-    release(&tickslock);
-  }
-  else p->wtime = ticks;
-  
-  // calcuate the cpu burst here
-  if(p->special && current_sched_policy == SCHED_NPREEMPT_SJF)
-  {
-    calculate_estimate(p);
-  }
-    
-  if(p->special && current_sched_policy == SCHED_PREEMPT_UNIX)
-  {
-    p->cpu_usage += SCHED_PARAM_CPU_USAGE;
-  }
+  if(p->special){
+
+    if(!holding(&tickslock)) {
+      acquire(&tickslock);
+      xticks = ticks;
+      release(&tickslock);
+    }
+    else xticks = ticks;
+
+    p->wtime = xticks;
+    if(current_sched_policy == SCHED_NPREEMPT_SJF){
+      calculate_estimate(p, xticks);
+    } else if(current_sched_policy == SCHED_PREEMPT_UNIX){
+      p->cpu_usage += SCHED_PARAM_CPU_USAGE;
+    }
+  } 
 
   sched();
   release(&p->lock);
@@ -837,7 +834,7 @@ forkret(void)
   // batch_exec_time is set as its stime.
   if((myproc()->special == 1) && stats.first_proc_in_batch == 0){
     stats.first_proc_in_batch = 1;
-    stats.batch_exec_time = myproc()->ctime;
+    stats.batch_exec_time = xticks;
   }
 
   if (first) {
@@ -872,14 +869,13 @@ sleep(void *chan, struct spinlock *lk)
   p->chan = chan;
   p->state = SLEEPING;
 
-  if(p->special && current_sched_policy == SCHED_NPREEMPT_SJF)
-  {
-    calculate_estimate(p);
-  }
-    
-  
-  if (p->special && current_sched_policy == SCHED_PREEMPT_UNIX) {
-    p->cpu_usage += SCHED_PARAM_CPU_USAGE/2;
+  if(p->special)
+  { 
+    if(current_sched_policy == SCHED_NPREEMPT_SJF){
+      calculate_estimate(p, 0);
+    } else if(current_sched_policy == SCHED_PREEMPT_UNIX){
+      p->cpu_usage += SCHED_PARAM_CPU_USAGE/2;
+    }
   }
   
   sched();
@@ -1133,11 +1129,8 @@ schedpolicy(int new_policy)
 {
   int old_policy;
 
-  // push_off();
-  // struct cpu * c = mycpu();
   old_policy = current_sched_policy;
   current_sched_policy = new_policy;
-  // pop_off();
   return old_policy;
 }
 
@@ -1172,7 +1165,7 @@ forkp(int base_priority)
   np->nextest = 0;
   np->cpu_usage = 0;
   np->priority = base_priority;
-  printf("Creating new process with pid = %d, ppid = %d\n\n", np->pid, p->pid);
+  np->proc_wait_time = 0;
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
@@ -1206,14 +1199,16 @@ forkp(int base_priority)
 }
 
 void
-calculate_estimate(struct proc* p) {
-  uint xticks;
-  if (!holding(&tickslock)) {
-    acquire(&tickslock);
-    xticks = ticks;
-    release(&tickslock);
+calculate_estimate(struct proc* p, uint xticks) {
+
+  if(xticks == 0){
+    if (!holding(&tickslock)) {
+      acquire(&tickslock);
+      xticks = ticks;
+      release(&tickslock);
+    }
+    else xticks = ticks;
   }
-  else xticks = ticks;
 
   if(p->nextest > 0) {
     stats.count_est_cpu_burst += 1;
@@ -1269,18 +1264,21 @@ print_batch_stats()
   printf("Completion time: avg: %d, max: %d, min: %d \n", stats.avg_completion_time/BATCH_SIZE
                                                         , stats.max_completion_time
                                                         , stats.min_completion_time);
-  printf("CPU bursts: count: %d, avg: %d, max: %d, min: %d\n", stats.count_cpu_burst
+ 
+ if(current_sched_policy == SCHED_NPREEMPT_SJF){
+    printf("CPU bursts: count: %d, avg: %d, max: %d, min: %d\n", stats.count_cpu_burst
                                                              , stats.avg_cpu_burst/stats.count_cpu_burst
                                                              , stats.max_cpu_burst
                                                              , stats.min_cpu_burst);
-  printf("CPU burst estimates: count: %d, avg: %d, max: %d, min: %d\n", stats.count_est_cpu_burst
+    printf("CPU burst estimates: count: %d, avg: %d, max: %d, min: %d\n", stats.count_est_cpu_burst
                                                                       , stats.avg_cpu_burst_est/stats.count_est_cpu_burst
                                                                       , stats.max_cpu_burst_est
                                                                       , stats.min_cpu_burst_est);
-  printf("CPU burst estimation error: count: %d, avg: %d\n", stats.est_error_count
+    printf("CPU burst estimation error: count: %d, avg: %d\n", stats.est_error_count
                                                            , stats.est_error_avg/stats.est_error_count);
 
-
+ }
+ 
   // reset all the stats variable for the next batch
   stats.batch_exec_time = 0;
   stats.first_proc_in_batch = 0;

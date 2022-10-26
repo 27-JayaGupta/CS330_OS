@@ -24,7 +24,6 @@ struct cpu {
   struct context context;     // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
   int intena;                 // Were interrupts enabled before push_off()?
-  int schedpolicy;            // Current scheduling policy used by cpu
 };
 
 extern struct cpu cpus[NCPU];
@@ -110,7 +109,8 @@ struct proc {
   int ctime;		       // Creation time
   int stime;		       // Execution start time
   int endtime;		       // Execution end time
-  int wtime;             // Starting wait time
+  int wtime;             // Start time of process wait
+  int proc_wait_time;     // Complete waiting time of the process
   int base_priority;          // base priority of the process. Should p-lock be held for this???
   int sticks;             // start time of cpu burst
   int nextest;            // next estimate of cpu burst
