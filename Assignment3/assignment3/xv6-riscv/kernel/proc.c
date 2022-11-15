@@ -29,7 +29,7 @@ int head = 0;   // index from where the consumer consumes
 int tail = 0;   // index where the producer produces
 struct sleeplock grab_head;
 struct sleeplock grab_tail;
-
+struct spinlock cond;
 // Semaphore implementation of multi cons-prod bounded buffer
 #define SEM_BUFFER_COUNT 20
 struct sem_buffer_elem sem_buffer_list[SEM_BUFFER_COUNT];
@@ -95,7 +95,8 @@ void
 procinit(void)
 {
   struct proc *p;
-  
+  initlock(&cond,"cond_sleep");
+
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
   initsleeplock(&print_lock, "print_lock");
@@ -1024,8 +1025,11 @@ condsleep(struct cond_t* chan, struct sleeplock *lk)
   // (wakeup locks p->lock),
   // so it's okay to release lk.
 
-  acquire(&p->lock);  //DOC: sleeplock1
+  //cond is used to provide mutual exclusion as two simulataneous call here may cause deadlock.
+  acquire(&cond);
+  acquire(&p->lock);    
   releasesleep(lk);
+  release(&cond);
 
   // Go to sleep.
   p->chan = chan;
