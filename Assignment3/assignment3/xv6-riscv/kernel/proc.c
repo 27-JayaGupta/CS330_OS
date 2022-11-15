@@ -15,7 +15,7 @@
 
 int sched_policy;
 struct cpu cpus[NCPU];
-
+int second_check=-1;
 struct proc proc[NPROC];
 
 // Condition variable implementation of barrier
@@ -1028,7 +1028,9 @@ condsleep(struct cond_t* chan, struct sleeplock *lk)
   //cond is used to provide mutual exclusion as two simulataneous call here may cause deadlock.
   acquire(&cond);
   acquire(&p->lock);    
+  second_check=myproc()->pid;
   releasesleep(lk);
+  second_check=-1;
   release(&cond);
 
   // Go to sleep.
@@ -1081,7 +1083,7 @@ wakeup(void *chan)
   else xticks = ticks;
 
   for(p = proc; p < &proc[NPROC]; p++) {
-    if(p != myproc()){
+    if(p != myproc()&&p->pid!=second_check){    // We applied second check beacause in some cases myproc() was returning zero and giving a deadlock with cond_sleep (We were not able to understand the reason why myproc() was returning zero.)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
